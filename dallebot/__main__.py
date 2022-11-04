@@ -69,8 +69,10 @@ def generate(update: Update, context: CallbackContext, size=512) -> None:
 
     hashed_user = hash(update.message.from_user.id)
     datetime_now = datetime.datetime.now()
-
-    seconds_diff = (datetime_now - max(df[df.hashed_user == hashed_user]["timestamp"], default=0)).seconds
+    max_datetime_for_user = max(
+        df[df.hashed_user == hashed_user]["timestamp"], default=datetime.datetime.strptime("2022-01-01", "%Y-%m-%d")
+    )
+    seconds_diff = (datetime_now - max_datetime_for_user).seconds
 
     if seconds_diff < min_requests_delay:
         context.bot.send_message(
