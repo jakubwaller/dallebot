@@ -93,30 +93,23 @@ def generate(update: Update, context: CallbackContext, size=512) -> None:
         is_group_text = "a single user"
     context.bot.send_message(developer_chat_id, f"Sending a dalle image to {is_group_text}: {prompt}")
 
-    num_of_max_tries = 5
-    num_of_tries = 1
-    success = False
+    try:
+        moderation_response = openai.Moderation.create(prompt)
 
-    while num_of_tries <= num_of_max_tries and not success:
-        try:
-            num_of_tries += 1
+        logger.info(moderation_response)
 
-            moderation_response = openai.Moderation.create(prompt)
+        if not moderation_response["results"][0]["flagged"]:
+            response = openai.Image.create(prompt=prompt, n=1, size=f"{size}x{size}", user=str(hashed_user))
+            image_url = response["data"][0]["url"]
 
-            if not moderation_response["results"][0]["flagged"]:
-                response = openai.Image.create(prompt=prompt, n=1, size=f"{size}x{size}", user=str(hashed_user))
-                image_url = response["data"][0]["url"]
-
-                context.bot.send_photo(chat_id, image_url, caption=prompt)
-            else:
-                context.bot.send_message("This prompt doesn't comply with OpenAI's content policy.")
-
-            success = True
-        except Exception as e:
-            if num_of_tries == num_of_max_tries:
-                raise e
-            else:
-                logger.error(e)
+            context.bot.send_photo(chat_id, image_url, caption=prompt)
+        else:
+            context.bot.send_message("This prompt doesn't comply with OpenAI's content policy.")
+    except openai.error.InvalidRequestError as e:
+        context.bot.send_message(chat_id, str(e))
+        raise e
+    except Exception as e:
+        raise e
 
 
 def error_handler(update: object, context: CallbackContext) -> None:
@@ -136,8 +129,6 @@ def error_handler(update: object, context: CallbackContext) -> None:
         f"An exception was raised while handling an update\n"
         f"<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}"
         "</pre>\n\n"
-        f"<pre>context.chat_data = {html.escape(str(context.chat_data))}</pre>\n\n"
-        f"<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n"
         f"<pre>{html.escape(tb_string)}"
     )
 
