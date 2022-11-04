@@ -1,0 +1,4 @@
+venv_dallebot
+dallebot/env.json
+.idea
+*.csv

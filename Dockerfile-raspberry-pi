@@ -1,0 +1,11 @@
+FROM arm64v8/python:3.8-buster
+
+COPY pip.conf /etc/pip.conf
+COPY requirements.txt requirements.txt
+RUN python3 -m pip install --upgrade pip
+RUN python3 -m pip install -r requirements.txt
+
+COPY . /dallebot
+RUN cd /dallebot && python3 -m pip install .
+
+WORKDIR /dallebot
