@@ -104,7 +104,7 @@ def generate(update: Update, context: CallbackContext, size=512) -> None:
 
             context.bot.send_photo(chat_id, image_url, caption=prompt)
         else:
-            context.bot.send_message("This prompt doesn't comply with OpenAI's content policy.")
+            context.bot.send_message(chat_id, "This prompt doesn't comply with OpenAI's content policy.")
     except openai.error.InvalidRequestError as e:
         context.bot.send_message(chat_id, str(e))
         raise e
