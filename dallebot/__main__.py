@@ -7,14 +7,14 @@ import traceback
 import openai as openai
 import pandas as pd
 from telegram import Update, ParseMode, ChatAction
-from telegram.ext import Updater, CallbackContext, CommandHandler
+from telegram.ext import Updater, CallbackContext, CommandHandler, ConversationHandler, MessageHandler, Filters
 
 from tools import read_config
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-min_requests_delay = 60  # in seconds
+min_requests_delay = 30  # in seconds
 csv_file_name = "logs/dalle_bot_logs.csv"
 df_columns = ["group", "timestamp", "prompt", "size", "hashed_user"]
 
@@ -24,6 +24,8 @@ bot_token = config["bot_token"]
 openai_api_key = config["openai_api_key"]
 
 openai.api_key = openai_api_key
+
+MESSAGE, EMPTY_MESSAGE = range(2)
 
 try:
     df = pd.read_csv(csv_file_name)
@@ -35,7 +37,7 @@ except Exception:
         os.mkdir(outdir)
 
 
-def start(update: Update, context: CallbackContext) -> None:
+def start(update: Update, context: CallbackContext) -> int:
     context.bot.send_message(
         update.message.chat.id,
         "Hi there! I’m DALL·E Bot.\n"
@@ -46,14 +48,20 @@ def start(update: Update, context: CallbackContext) -> None:
         f"the timestamp and the prompt.",
     )
 
+    return MESSAGE
 
-def generate(update: Update, context: CallbackContext, size=512) -> None:
+
+def generate(
+    update: Update,
+    context: CallbackContext,
+    prompt: str,
+    chat_id: int,
+    datetime_now: datetime.datetime,
+    hashed_user: int,
+    size: int = 512,
+) -> int:
     """Sends a dalle image."""
-    chat_id = update.message.chat.id
-
     context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
-
-    prompt = " ".join(context.args)
 
     global df
 
@@ -66,6 +74,52 @@ def generate(update: Update, context: CallbackContext, size=512) -> None:
         logger.error(e)
         is_group = False
 
+    df = pd.concat([df, pd.DataFrame([[is_group, datetime_now, prompt, size, hashed_user]], columns=df_columns)])
+    df.to_csv(csv_file_name, header=True, index=False)
+
+    if is_group:
+        is_group_text = "a group"
+    else:
+        is_group_text = "a single user"
+    context.bot.send_message(developer_chat_id, f"Sending a dalle image to {is_group_text}: {prompt}")
+
+    try:
+        moderation_response = openai.Moderation.create(prompt)
+
+        if not moderation_response["results"][0]["flagged"]:
+            response = openai.Image.create(prompt=prompt, n=1, size=f"{size}x{size}", user=str(hashed_user))
+            image_url = response["data"][0]["url"]
+
+            context.bot.send_photo(chat_id, image_url, caption=prompt)
+        else:
+            context.bot.send_message(chat_id, "This prompt doesn't comply with OpenAI's content policy.")
+    except openai.error.InvalidRequestError as e:
+        context.bot.send_message(chat_id, str(e))
+        raise e
+    except Exception as e:
+        raise e
+
+    return MESSAGE
+
+
+def generate_from_command(update: Update, context: CallbackContext) -> int:
+    """Checks if there is a prompt."""
+    prompt = (" ".join(context.args)).strip()
+
+    return check_if_prompt_empty_and_message_not_too_early(update, context, prompt)
+
+
+def generate_from_message(update: Update, context: CallbackContext) -> int:
+    """Previous command didn't include a prompt, let's see if this one does."""
+    prompt = update.message.text.strip()
+
+    return check_if_prompt_empty_and_message_not_too_early(update, context, prompt)
+
+
+def check_if_prompt_empty_and_message_not_too_early(update: Update, context: CallbackContext, prompt) -> int:
+    global df
+
+    chat_id = update.message.chat.id
     hashed_user = hash(update.message.from_user.id)
     datetime_now = datetime.datetime.now()
     max_datetime_for_user = max(
@@ -81,37 +135,16 @@ def generate(update: Update, context: CallbackContext, size=512) -> None:
             f"Please try again in {min_requests_delay - seconds_diff} seconds.",
         )
 
-        return
+        return EMPTY_MESSAGE
 
-    df = pd.concat([df, pd.DataFrame([[is_group, datetime_now, prompt, size, hashed_user]], columns=df_columns)])
-    df.to_csv(csv_file_name, header=True, index=False)
-
-    if is_group:
-        is_group_text = "a group"
+    if len(prompt) == 0 or prompt == "":
+        context.bot.send_message(chat_id, "K let's do this! What image should I generate?")
+        return EMPTY_MESSAGE
     else:
-        is_group_text = "a single user"
-    context.bot.send_message(developer_chat_id, f"Sending a dalle image to {is_group_text}: {prompt}")
-
-    try:
-        moderation_response = openai.Moderation.create(prompt)
-
-        logger.info(moderation_response)
-
-        if not moderation_response["results"][0]["flagged"]:
-            response = openai.Image.create(prompt=prompt, n=1, size=f"{size}x{size}", user=str(hashed_user))
-            image_url = response["data"][0]["url"]
-
-            context.bot.send_photo(chat_id, image_url, caption=prompt)
-        else:
-            context.bot.send_message(chat_id, "This prompt doesn't comply with OpenAI's content policy.")
-    except openai.error.InvalidRequestError as e:
-        context.bot.send_message(chat_id, str(e))
-        raise e
-    except Exception as e:
-        raise e
+        return generate(update, context, prompt, chat_id, datetime_now, hashed_user)
 
 
-def error_handler(update: object, context: CallbackContext) -> None:
+def error_handler(update: object, context: CallbackContext) -> int:
     """Log the error and send a telegram message to notify the developer."""
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
 
@@ -124,14 +157,37 @@ def error_handler(update: object, context: CallbackContext) -> None:
 
     context.bot.send_message(chat_id=developer_chat_id, text=message, parse_mode=ParseMode.HTML)
 
+    return MESSAGE
+
+
+def cancel(update: Update, context: CallbackContext) -> int:
+    """Cancels and ends the conversation."""
+
+    return MESSAGE
+
 
 def main() -> None:
     """Setup and run the bot."""
     # Create the Updater and pass it your bot's token.
     updater = Updater(bot_token)
 
-    updater.dispatcher.add_handler(CommandHandler("generate", generate, pass_args=True))
-    updater.dispatcher.add_handler(CommandHandler("start", start))
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("generate", generate_from_command, pass_args=True)],
+        states={
+            MESSAGE: [
+                CommandHandler("generate", generate_from_command, pass_args=True),
+                CommandHandler("start", start),
+            ],
+            EMPTY_MESSAGE: [
+                MessageHandler(Filters.text & ~Filters.command, generate_from_message),
+                CommandHandler("generate", generate_from_command, pass_args=True),
+                CommandHandler("start", start),
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+
+    updater.dispatcher.add_handler(conv_handler)
 
     updater.dispatcher.add_error_handler(error_handler)
 
