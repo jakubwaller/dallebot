@@ -172,7 +172,10 @@ def main() -> None:
     updater = Updater(bot_token)
 
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("generate", generate_from_command, pass_args=True)],
+        entry_points=[
+            CommandHandler("generate", generate_from_command, pass_args=True),
+            CommandHandler("start", start),
+        ],
         states={
             MESSAGE: [
                 CommandHandler("generate", generate_from_command, pass_args=True),
