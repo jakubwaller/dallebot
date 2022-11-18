@@ -45,7 +45,11 @@ def start(update: Update, context: CallbackContext) -> int:
         f"Due to resource constraints it is only allowed to send "
         f"one request per {min_requests_delay} seconds.\n"
         f"In order to achieve this, I'm storing your anonymised hashed user id together with "
-        f"the timestamp and the prompt.",
+        f"the timestamp of your message.\n"
+        f"To comply with OpenAI's moderation policy, I'm also storing the prompts and the generated images, "
+        f"again all fully anonymised.\n\n"
+        f"If you find issues or have any questions, please contact dallebot@jakubwaller.eu\n"
+        f"Feel free to also check out the code at: https://github.com/jakubwaller/dallebot",
     )
 
     return MESSAGE
@@ -78,10 +82,9 @@ def generate(
     df.to_csv(csv_file_name, header=True, index=False)
 
     if is_group:
-        is_group_text = "a group"
+        is_group_text = "group: "
     else:
-        is_group_text = "a single user"
-    context.bot.send_message(developer_chat_id, f"Sending a dalle image to {is_group_text}: {prompt}")
+        is_group_text = "single user: "
 
     try:
         moderation_response = openai.Moderation.create(prompt)
@@ -91,11 +94,15 @@ def generate(
             image_url = response["data"][0]["url"]
 
             context.bot.send_photo(chat_id, image_url, caption=prompt)
+            context.bot.send_photo(developer_chat_id, image_url, caption=is_group_text + prompt)
         else:
             context.bot.send_message(chat_id, "This prompt doesn't comply with OpenAI's content policy.")
+            context.bot.send_message(
+                developer_chat_id, f"This prompt doesn't comply with OpenAI's content policy: " f"{prompt}."
+            )
     except openai.error.InvalidRequestError as e:
         context.bot.send_message(chat_id, str(e))
-        raise e
+        context.bot.send_message(developer_chat_id, f"{prompt}\n{str(e)}")
     except Exception as e:
         raise e
 
