@@ -58,7 +58,7 @@ def generate(
     chat_id: int,
     datetime_now: datetime.datetime,
     hashed_user: int,
-    size: int = 512,
+    size: int = 256,
 ) -> int:
     """Sends a dalle image."""
     context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
