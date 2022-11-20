@@ -14,7 +14,7 @@ from tools import read_config
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-min_requests_delay = 30  # in seconds
+min_requests_delay = 60  # in seconds
 csv_file_name = "logs/dalle_bot_logs.csv"
 df_columns = ["group", "timestamp", "prompt", "size", "hashed_user"]
 
