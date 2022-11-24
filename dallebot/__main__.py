@@ -103,8 +103,8 @@ def generate(
                 developer_chat_id, f"This prompt doesn't comply with OpenAI's content policy: " f"{prompt}."
             )
     except (openai.error.InvalidRequestError, openai.error.RateLimitError) as e:
-        context.bot.send_message(chat_id, str(e))
-        context.bot.send_message(developer_chat_id, f"{prompt}\n{str(e)}")
+        context.bot.send_message(chat_id, f"ERROR: {str(e)}")
+        context.bot.send_message(developer_chat_id, f"prompt: {prompt}\nerror: {str(e)}")
     except Exception as e:
         raise e
 
