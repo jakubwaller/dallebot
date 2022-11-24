@@ -137,7 +137,7 @@ def check_if_prompt_empty_and_message_not_too_early(update: Update, context: Cal
     if number_of_requests_per_day > max_images_per_day:
         context.bot.send_message(
             chat_id,
-            f"Sorry, as the image generation is not for free, there is a limit of {max_images_per_day} per day. "
+            f"Sorry, as the image generation is not for free, there is a limit of {max_images_per_day} images per day. "
             f"Please try again tomorrow.",
         )
 
