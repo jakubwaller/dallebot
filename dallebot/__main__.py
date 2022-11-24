@@ -134,7 +134,7 @@ def check_if_prompt_empty_and_message_not_too_early(update: Update, context: Cal
     today = datetime.datetime.combine(datetime.date.today(), datetime.datetime.min.time())
     number_of_requests_per_day = df.loc[(df.hashed_user == hashed_user) & (df.timestamp >= today)].shape[0]
 
-    if number_of_requests_per_day > max_images_per_day:
+    if number_of_requests_per_day >= max_images_per_day:
         context.bot.send_message(
             chat_id,
             f"Sorry, as the image generation is not for free, there is a limit of {max_images_per_day} images per day. "
