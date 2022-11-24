@@ -130,6 +130,19 @@ def check_if_prompt_empty_and_message_not_too_early(update: Update, context: Cal
 
     chat_id = update.message.chat.id
     hashed_user = hash(update.message.from_user.id)
+
+    today = datetime.datetime.combine(datetime.date.today(), datetime.datetime.min.time())
+    number_of_requests_per_day = df.loc[(df.hashed_user == hashed_user) & (df.timestamp >= today)].shape[0]
+
+    if number_of_requests_per_day > max_images_per_day:
+        context.bot.send_message(
+            chat_id,
+            f"Sorry, as the image generation is not for free, there is a limit of {max_images_per_day} per day. "
+            f"Please try again tomorrow.",
+        )
+
+        return EMPTY_MESSAGE
+
     datetime_now = datetime.datetime.now()
     max_datetime_for_user = max(
         df[df.hashed_user == hashed_user]["timestamp"], default=datetime.datetime.strptime("2022-01-01", "%Y-%m-%d")
@@ -142,18 +155,6 @@ def check_if_prompt_empty_and_message_not_too_early(update: Update, context: Cal
             f"Sorry, due to resource constraints, it's only allowed to send one request per "
             f"{min_requests_delay} seconds.\n"
             f"Please try again in {min_requests_delay - seconds_diff} seconds.",
-        )
-
-        return EMPTY_MESSAGE
-
-    today = datetime.datetime.combine(datetime.date.today(), datetime.datetime.min.time())
-    number_of_requests_per_day = df.loc[(df.hashed_user == hashed_user) & (df.timestamp >= today)].shape[0]
-
-    if number_of_requests_per_day > max_images_per_day:
-        context.bot.send_message(
-            chat_id,
-            f"Sorry, as the image generation is not for free, there is a limit of {max_images_per_day} per day. "
-            f"Please try again tomorrow.",
         )
 
         return EMPTY_MESSAGE
