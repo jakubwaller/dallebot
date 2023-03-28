@@ -23,6 +23,7 @@ config = read_config()
 developer_chat_id = config["developer_chat_id"]
 bot_token = config["bot_token"]
 openai_api_key = config["openai_api_key"]
+admin_user = config["admin_user"]
 
 openai.api_key = openai_api_key
 
@@ -129,12 +130,13 @@ def check_if_prompt_empty_and_message_not_too_early(update: Update, context: Cal
     global df
 
     chat_id = update.message.chat.id
-    hashed_user = hash(update.message.from_user.id)
+    user_id = update.message.from_user.id
+    hashed_user = hash(user_id)
 
     today = datetime.datetime.combine(datetime.date.today(), datetime.datetime.min.time())
     number_of_requests_per_day = df.loc[(df.hashed_user == hashed_user) & (df.timestamp >= today)].shape[0]
 
-    if number_of_requests_per_day >= max_images_per_day:
+    if number_of_requests_per_day >= max_images_per_day and user_id != admin_user:
         context.bot.send_message(
             chat_id,
             f"Sorry, as the image generation is not for free, there is a limit of {max_images_per_day} images per day. "
@@ -149,7 +151,7 @@ def check_if_prompt_empty_and_message_not_too_early(update: Update, context: Cal
     )
     seconds_diff = (datetime_now - max_datetime_for_user).seconds
 
-    if seconds_diff < min_requests_delay:
+    if seconds_diff < min_requests_delay and user_id != admin_user:
         context.bot.send_message(
             chat_id,
             f"Sorry, due to resource constraints, it's only allowed to send one request per "
