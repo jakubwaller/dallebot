@@ -131,7 +131,7 @@ def check_if_prompt_empty_and_message_not_too_early(update: Update, context: Cal
 
     chat_id = update.message.chat.id
     user_id = update.message.from_user.id
-    hashed_user = hash(user_id)
+    hashed_user = hash(str(user_id))
 
     today = datetime.datetime.combine(datetime.date.today(), datetime.datetime.min.time())
     number_of_requests_per_day = df.loc[(df.hashed_user == hashed_user) & (df.timestamp >= today)].shape[0]
@@ -172,14 +172,7 @@ def error_handler(update: object, context: CallbackContext) -> int:
     """Log the error and send a telegram message to notify the developer."""
     logger.error(msg="Exception while handling an update:", exc_info=context.error)
 
-    tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
-    tb_string = "".join(tb_list)
-
-    message = f"An exception was raised while handling an update\n" f"<pre>{html.escape(tb_string)}"
-
-    message = message[:4090] + "</pre>"
-
-    context.bot.send_message(chat_id=developer_chat_id, text=message, parse_mode=ParseMode.HTML)
+    context.bot.send_message(chat_id=developer_chat_id, text=str(context.error))
 
     return MESSAGE
 
