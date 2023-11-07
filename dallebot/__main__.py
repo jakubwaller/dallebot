@@ -1,12 +1,10 @@
 import datetime
-import html
 import logging
 import os
-import traceback
 
-import openai as openai
+import openai
 import pandas as pd
-from telegram import Update, ParseMode, ChatAction
+from telegram import Update, ChatAction
 from telegram.ext import Updater, CallbackContext, CommandHandler, ConversationHandler, MessageHandler, Filters
 
 from tools import read_config
@@ -25,7 +23,7 @@ bot_token = config["bot_token"]
 openai_api_key = config["openai_api_key"]
 admin_user = config["admin_user"]
 
-openai.api_key = openai_api_key
+client = openai.OpenAI(api_key=openai_api_key)
 
 MESSAGE, EMPTY_MESSAGE = range(2)
 
@@ -59,13 +57,13 @@ def start(update: Update, context: CallbackContext) -> int:
 
 
 def generate(
-    update: Update,
-    context: CallbackContext,
-    prompt: str,
-    chat_id: int,
-    datetime_now: datetime.datetime,
-    hashed_user: int,
-    size: int = 256,
+        update: Update,
+        context: CallbackContext,
+        prompt: str,
+        chat_id: int,
+        datetime_now: datetime.datetime,
+        hashed_user: int,
+        size: int = 1024,
 ) -> int:
     """Sends a dalle image."""
     context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
@@ -90,20 +88,27 @@ def generate(
         is_group_text = "single user: "
 
     try:
-        moderation_response = openai.Moderation.create(prompt)
+        moderation_response = client.moderations.create(input=prompt)
 
-        if not moderation_response["results"][0]["flagged"]:
-            response = openai.Image.create(prompt=prompt, n=1, size=f"{size}x{size}", user=str(hashed_user))
-            image_url = response["data"][0]["url"]
+        if not moderation_response.results[0].flagged:
+            response = client.images.generate(
+                model="dall-e-3",
+                prompt=prompt,
+                n=1,
+                size=f"{size}x{size}",
+                user=str(hashed_user)
+            )
+            image_url = response.data[0].url
+            revised_prompt = response.data[0].revised_prompt
 
-            context.bot.send_photo(chat_id, image_url, caption=prompt)
-            context.bot.send_photo(developer_chat_id, image_url, caption=is_group_text + prompt)
+            context.bot.send_photo(chat_id, image_url, caption=revised_prompt)
+            context.bot.send_photo(developer_chat_id, image_url, caption=is_group_text + revised_prompt)
         else:
             context.bot.send_message(chat_id, "This prompt doesn't comply with OpenAI's content policy.")
             context.bot.send_message(
                 developer_chat_id, f"This prompt doesn't comply with OpenAI's content policy: " f"{prompt}."
             )
-    except (openai.error.InvalidRequestError, openai.error.RateLimitError) as e:
+    except (openai.APIStatusError, openai.RateLimitError) as e:
         context.bot.send_message(chat_id, f"ERROR: {str(e)}")
         context.bot.send_message(developer_chat_id, f"prompt: {prompt}\nerror: {str(e)}")
     except Exception as e:
