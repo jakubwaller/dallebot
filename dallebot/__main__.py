@@ -23,6 +23,8 @@ bot_token = config["bot_token"]
 openai_api_key = config["openai_api_key"]
 admin_user = config["admin_user"]
 
+user_styles = {}
+
 client = openai.OpenAI(api_key=openai_api_key)
 
 MESSAGE, EMPTY_MESSAGE = range(2)
@@ -63,7 +65,7 @@ def generate(
         chat_id: int,
         datetime_now: datetime.datetime,
         hashed_user: int,
-        size: int = 1024,
+        size: int = 1024
 ) -> int:
     """Sends a dalle image."""
     context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
@@ -96,13 +98,15 @@ def generate(
                 prompt=prompt,
                 n=1,
                 size=f"{size}x{size}",
-                user=str(hashed_user)
+                user=str(hashed_user),
+                style=user_styles[hashed_user]
             )
             image_url = response.data[0].url
             revised_prompt = response.data[0].revised_prompt
 
             context.bot.send_photo(chat_id, image_url, caption=revised_prompt)
-            context.bot.send_photo(developer_chat_id, image_url, caption=is_group_text + revised_prompt)
+            context.bot.send_photo(developer_chat_id, image_url,
+                                   caption=f"{is_group_text}{prompt}.\nRevised prompt{revised_prompt}")
         else:
             context.bot.send_message(chat_id, "This prompt doesn't comply with OpenAI's content policy.")
             context.bot.send_message(
@@ -120,6 +124,21 @@ def generate(
 def generate_from_command(update: Update, context: CallbackContext) -> int:
     """Checks if there is a prompt."""
     prompt = (" ".join(context.args)).strip()
+    user_id = update.message.from_user.id
+    hashed_user = hash(str(user_id))
+
+    user_styles[hashed_user] = "vivid"
+
+    return check_if_prompt_empty_and_message_not_too_early(update, context, prompt)
+
+
+def generate_natural_from_command(update: Update, context: CallbackContext) -> int:
+    """Checks if there is a prompt."""
+    prompt = (" ".join(context.args)).strip()
+    user_id = update.message.from_user.id
+    hashed_user = hash(str(user_id))
+
+    user_styles[hashed_user] = "natural"
 
     return check_if_prompt_empty_and_message_not_too_early(update, context, prompt)
 
@@ -196,15 +215,18 @@ def main() -> None:
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("generate", generate_from_command, pass_args=True),
+            CommandHandler("generate_natural", generate_natural_from_command, pass_args=True),
             CommandHandler("start", start),
         ],
         states={
             MESSAGE: [
                 CommandHandler("generate", generate_from_command, pass_args=True),
+                CommandHandler("generate_natural", generate_natural_from_command, pass_args=True),
                 CommandHandler("start", start),
             ],
             EMPTY_MESSAGE: [
                 MessageHandler(Filters.text & ~Filters.command, generate_from_message),
+                CommandHandler("generate_natural", generate_natural_from_command, pass_args=True),
                 CommandHandler("generate", generate_from_command, pass_args=True),
                 CommandHandler("start", start),
             ],
