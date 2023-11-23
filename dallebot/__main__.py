@@ -106,7 +106,7 @@ def generate(
 
             context.bot.send_photo(chat_id, image_url, caption=revised_prompt)
             context.bot.send_photo(developer_chat_id, image_url,
-                                   caption=f"{is_group_text}{prompt}.\nRevised prompt{revised_prompt}")
+                                   caption=f"{is_group_text}{prompt}.\nRevised prompt: {revised_prompt}")
         else:
             context.bot.send_message(chat_id, "This prompt doesn't comply with OpenAI's content policy.")
             context.bot.send_message(
